@@ -149,6 +149,28 @@ def calculate_shfm_points(
         raise ValueError("NYHA class must be 1, 2, 3, or 4")
     if sex.lower() not in ("male", "female"):
         raise ValueError("sex must be 'male' or 'female'")
+    if age < 0 or age > 150:
+        raise ValueError("age must be between 0 and 150")
+    if weight_kg < 0 or weight_kg > 500:
+        raise ValueError("weight_kg must be between 0 and 500")
+    if ejection_fraction < 0 or ejection_fraction > 100:
+        raise ValueError("ejection_fraction must be between 0 and 100")
+    if systolic_bp < 0 or systolic_bp > 300:
+        raise ValueError("systolic_bp must be between 0 and 300")
+    if diastolic_bp < 0 or diastolic_bp > 200:
+        raise ValueError("diastolic_bp must be between 0 and 200")
+    if sodium < 0 or sodium > 200:
+        raise ValueError("sodium must be between 0 and 200")
+    if creatinine < 0 or creatinine > 30:
+        raise ValueError("creatinine must be between 0 and 30")
+    if hemoglobin < 0 or hemoglobin > 25:
+        raise ValueError("hemoglobin must be between 0 and 25")
+    if lymphocytes < 0 or lymphocytes > 20:
+        raise ValueError("lymphocytes must be between 0 and 20")
+    if uric_acid < 0 or uric_acid > 30:
+        raise ValueError("uric_acid must be between 0 and 30")
+    if bun < 0 or bun > 200:
+        raise ValueError("bun must be between 0 and 200")
     
     # Calculate linear predictor (sum of points)
     points = 0.0

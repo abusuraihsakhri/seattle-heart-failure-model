@@ -89,6 +89,60 @@ def test_nyha_invalid():
         pass
 
 
+def test_sex_invalid():
+    """Invalid sex should raise ValueError."""
+    try:
+        calculate_shfm_points(age=65, ejection_fraction=35, sex="other")
+        assert False
+    except ValueError:
+        pass
+
+
+def test_negative_age_raises():
+    """Negative age should raise ValueError."""
+    try:
+        calculate_shfm_points(age=-5, ejection_fraction=35)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_extreme_age_raises():
+    """Age > 150 should raise ValueError."""
+    try:
+        calculate_shfm_points(age=200, ejection_fraction=35)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_negative_weight_raises():
+    """Negative weight should raise ValueError."""
+    try:
+        calculate_shfm_points(age=65, ejection_fraction=35, weight_kg=-10)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_negative_ef_raises():
+    """Negative ejection fraction should raise ValueError."""
+    try:
+        calculate_shfm_points(age=65, ejection_fraction=-5)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_ef_over_100_raises():
+    """EF > 100 should raise ValueError."""
+    try:
+        calculate_shfm_points(age=65, ejection_fraction=110)
+        assert False
+    except ValueError:
+        pass
+
+
 # =============================================================================
 # Ejection Fraction Tests
 # =============================================================================
@@ -269,4 +323,22 @@ def test_cli_calculate_with_meds():
 def test_cli_therapy():
     from cli import main
     rc = main(["therapy", "--therapy", "beta_blocker", "--age", "65", "--ef", "25", "--nyha", "3"])
+    assert rc == 0
+
+
+def test_cli_audit():
+    from cli import main
+    rc = main(["audit", "--task-id", "TEST-AUDIT-01"])
+    assert rc == 0
+
+
+def test_cli_chat():
+    from cli import main
+    rc = main(["chat", "Explain", "heart", "failure", "risk"])
+    assert rc == 0
+
+
+def test_cli_verify_audit():
+    from cli import main
+    rc = main(["verify-audit"])
     assert rc == 0

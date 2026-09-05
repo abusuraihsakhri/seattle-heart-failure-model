@@ -2,13 +2,18 @@
 """
 CLI for Seattle Heart Failure Model Calculator.
 
-Provides commands for SHFM 1-year mortality prediction and therapy benefit analysis.
+Provides commands for SHFM 1-year mortality prediction, therapy benefit analysis,
+and enterprise audit/chat operations.
 """
 import argparse
 import json
 import sys
 
 from shfm_calc import calculate_shfm_points, calculate_therapy_benefit
+
+from agents.supervisor import SystemSupervisor
+from agents.base import AuditLogger
+from agents.models import SystemTaskPayload
 
 
 def cmd_calculate(args):
@@ -106,6 +111,40 @@ def cmd_therapy(args):
     return 0
 
 
+def cmd_audit(args):
+    """Run enterprise audit task evaluation."""
+    supervisor = SystemSupervisor(model_provider="mock")
+    payload = SystemTaskPayload(
+        task_id=args.task_id,
+        target_identifier=getattr(args, "target_id", "CLI-TARGET"),
+        primary_metric=getattr(args, "primary_metric", 10.0),
+        secondary_metric=getattr(args, "secondary_metric", 3.0),
+        status_descriptor=getattr(args, "status", "NOMINAL"),
+        is_critical_flag=getattr(args, "critical", False),
+    )
+    dossier = supervisor.process_task(payload)
+    print(json.dumps(dossier.to_dict(), indent=2))
+    return 0
+
+
+def cmd_chat(args):
+    """Query the supervisory chat system."""
+    supervisor = SystemSupervisor(model_provider="mock")
+    query = " ".join(args.query_parts)
+    response = supervisor.query_supervisory_chat(query)
+    print(response)
+    return 0
+
+
+def cmd_verify_audit(args):
+    """Verify HMAC audit trail integrity."""
+    verified = AuditLogger.verify_integrity()
+    trail = AuditLogger.get_trail()
+    print(f"Audit trail integrity: {'VERIFIED' if verified else 'COMPROMISED'}")
+    print(f"Total audit blocks: {len(trail)}")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="shfm",
@@ -158,12 +197,34 @@ def main(argv=None):
     p_therapy.add_argument("--uric-acid", type=float, default=6.0)
     p_therapy.add_argument("--bun", type=float, default=20)
 
+    # Audit
+    p_audit = subparsers.add_parser("audit", help="Run enterprise audit task evaluation")
+    p_audit.add_argument("--task-id", default="CLI-TASK-01", help="Task identifier")
+    p_audit.add_argument("--target-id", default="CLI-TARGET", help="Target identifier")
+    p_audit.add_argument("--primary-metric", type=float, default=10.0, help="Primary metric")
+    p_audit.add_argument("--secondary-metric", type=float, default=3.0, help="Secondary metric")
+    p_audit.add_argument("--status", default="NOMINAL", help="Status descriptor")
+    p_audit.add_argument("--critical", action="store_true", help="Critical flag")
+
+    # Chat
+    p_chat = subparsers.add_parser("chat", help="Query supervisory chat")
+    p_chat.add_argument("query_parts", nargs="+", help="Query text")
+
+    # Verify audit
+    p_verify = subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
+
     args = parser.parse_args(argv)
 
     if args.command == "calculate":
         return cmd_calculate(args)
     elif args.command == "therapy":
         return cmd_therapy(args)
+    elif args.command == "audit":
+        return cmd_audit(args)
+    elif args.command == "chat":
+        return cmd_chat(args)
+    elif args.command == "verify-audit":
+        return cmd_verify_audit(args)
     return 0
 
 
