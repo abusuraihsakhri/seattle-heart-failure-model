@@ -28,5 +28,9 @@ jobs:
         run: python -m compileall -q agents cli.py shfm_calc.py enrichment.py simulator.py
       - name: Python tests
         run: python -m pytest -q
-      - name: Browser formula tests
-        run: node --test tests/test_browser_model.cjs
+      - name: Browser script syntax and reference tests
+        run: |
+          node --check web/calculator.js
+          python -c "from pathlib import Path; h=Path('web/index.html').read_text(); Path('/tmp/shfm-inline.js').write_text(h.split('<script>')[-1].split('</script>')[0])"
+          node --check /tmp/shfm-inline.js
+          node --test tests/test_browser_model.cjs
