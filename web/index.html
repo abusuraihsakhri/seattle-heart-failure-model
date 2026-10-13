@@ -1,236 +1,155 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seattle Heart Failure Model — Operations Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #090d16;
-            --card: #111827;
-            --border: #1f293d;
-            --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.25);
-            --text: #f3f4f6;
-            --text-muted: #9ca3af;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --success: #10b981;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            padding: 2rem;
-            min-height: 100vh;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .header-title h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
-        .header-title p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
-        .badge {
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            background: var(--accent-glow);
-            color: var(--accent);
-            border: 1px solid var(--accent);
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-        .card h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; }
-        input, select, textarea {
-            width: 100%;
-            padding: 0.65rem 0.9rem;
-            background: #0d1322;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: #fff;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
-        .btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 0.7rem 1.4rem;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            width: 100%;
-        }
-        .btn:hover { background: #2563eb; }
-        .terminal {
-            background: #060911;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: #10b981;
-            height: 380px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .metrics-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .metric-box {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .metric-val { font-size: 1.4rem; font-weight: 700; color: #fff; margin-top: 0.25rem; }
-        .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Seattle Heart Failure Model — Research Calculator</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18243a;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:24px 18px 60px}
+h1{font-size:clamp(1.65rem,4vw,2.4rem);margin:.3rem 0}h2{font-size:1.1rem;margin:0 0 1rem}
+p{line-height:1.55}.muted{color:#52637a}.eyebrow{color:#345b9a;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.76rem}
+.notice{border-left:4px solid #9d5c17;background:#fff8e8;padding:12px 15px;margin:16px 0 24px;line-height:1.55}
+.layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(270px,.85fr);align-items:start;gap:18px}
+.panel{background:white;border:1px solid #d9e2ef;border-radius:12px;padding:22px;box-shadow:0 3px 14px #2132530d}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
+.field label{font-size:.88rem;font-weight:600;display:block;margin-bottom:5px}
+input[type=number],select{width:100%;min-height:40px;border:1px solid #adbbd0;border-radius:7px;padding:8px 10px;font:inherit;background:white;color:#18243a}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #426fdb;outline-offset:2px}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:10px 0 22px}
+.checks label{font-size:.87rem;display:flex;gap:8px;align-items:start;line-height:1.3}
+input[type=checkbox]{width:18px;height:18px;flex-shrink:0;accent-color:#1c4f9d}
+.section{margin-top:24px;padding-top:18px;border-top:1px solid #e2e9f2}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+button{font:inherit;font-weight:650;border:1px solid #234b8b;border-radius:8px;padding:10px 14px;cursor:pointer;background:#204a88;color:white}
+button.secondary{color:#204a88;background:white}
+button:hover{filter:brightness(.95)}
+#result{min-height:190px}.result-table{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:15px}
+.result-card{border-radius:10px;border:1px solid #dbe3ef;padding:14px;background:#f8fafc}
+.result-card span{display:block;font-size:.8rem;color:#52637a}.result-card strong{font-size:1.65rem;display:block;margin-top:5px}
+#error{color:#a82029;font-weight:600;white-space:pre-wrap}.small{font-size:.84rem}
+a{color:#174d9d}.footer{border-top:1px solid #d3deed;margin-top:28px;padding-top:15px}
+@media(max-width:780px){.layout{grid-template-columns:1fr}.fields{grid-template-columns:1fr 1fr}}
+@media(max-width:460px){.fields,.checks{grid-template-columns:1fr}.panel{padding:17px}.result-card strong{font-size:1.4rem}}
+</style>
 </head>
 <body>
-
-    <div class="header">
-        <div class="header-title">
-            <h1>Seattle Heart Failure Model</h1>
-            <p>Domain: Clinical & Cryptographic AI | Standard: CAP / CLSI / NIST Standards | LabMind-Atlas Architecture</p>
-        </div>
-        <div>
-            <span class="badge">Air-Gapped Active</span>
-            <span class="badge" style="background: rgba(16,185,129,0.2); color: #10b981; border-color: #10b981;">Zero-PHI Guard Active</span>
-        </div>
-    </div>
-
-    <div class="metrics-bar">
-        <div class="metric-box">
-            <div class="metric-label">System Status</div>
-            <div class="metric-val" style="color: var(--success);" id="m-status">OPTIMAL</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Tasks Processed</div>
-            <div class="metric-val" id="m-tasks">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Audit Blocks Signed</div>
-            <div class="metric-val" id="m-audit">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">PHI Interceptions</div>
-            <div class="metric-val" style="color: var(--accent);" id="m-phi">0</div>
-        </div>
-    </div>
-
-    <div class="grid">
-        <div class="card">
-            <h2>⚙️ Dispatch Distributed Component Audit</h2>
-            <div class="form-group">
-                <label>Task / Sample ID</label>
-                <input type="text" id="task_id" value="TASK-2026-LIVE-01">
-            </div>
-            <div class="form-group">
-                <label>Target Identifier</label>
-                <input type="text" id="target_id" value="SPECIMEN-ALPHA-77">
-            </div>
-            <div class="form-group">
-                <label>Primary Measurement / Value</label>
-                <input type="number" id="primary_metric" value="29.4" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Secondary Metric / Kinetic Index</label>
-                <input type="number" id="secondary_metric" value="14.8" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Status / Phenotype Descriptor</label>
-                <input type="text" id="status_descriptor" value="DISCORDANT_ANOMALY">
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" id="is_critical" checked> Trigger Emergency / Critical Flag</label>
-            </div>
-            <button class="btn" onclick="runAudit()">Execute Distributed Component Audit</button>
-        </div>
-
-        <div class="card">
-            <h2>📊 Real-Time Consensus Dossier & Audit Log</h2>
-            <div class="terminal" id="outputConsole">// Seattle Heart Failure Model Operations Console Ready
-// Connection established with Air-Gapped Supervisor
-// Cryptographic HMAC-SHA256 audit ledger loaded.
-// Ready for live task payload dispatch...</div>
-        </div>
-    </div>
-
-    <script>
-        async function runAudit() {
-            const consoleEl = document.getElementById('outputConsole');
-            consoleEl.innerText = "// Dispatching task across specialized workers...
-// Invoking InvariantQCWorker, SafetyEscalationWorker, ProtocolWorker...";
-
-            const payload = {
-                task_id: document.getElementById('task_id').value,
-                target_identifier: document.getElementById('target_id').value,
-                primary_metric: parseFloat(document.getElementById('primary_metric').value),
-                secondary_metric: parseFloat(document.getElementById('secondary_metric').value),
-                status_descriptor: document.getElementById('status_descriptor').value,
-                is_critical_flag: document.getElementById('is_critical').checked
-            };
-
-            try {
-                const res = await fetch('/api/audit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                consoleEl.innerText = JSON.stringify(data, null, 2);
-                document.getElementById('m-tasks').innerText = parseInt(document.getElementById('m-tasks').innerText) + 1;
-                document.getElementById('m-audit').innerText = parseInt(document.getElementById('m-audit').innerText) + 1;
-            } catch (err) {
-                consoleEl.innerText = "// Offline / Simulation Output:\n" + JSON.stringify({
-                    dossier_id: "DOSSIER-SIM-" + Math.floor(Math.random()*10000),
-                    system: "seattle-heart-failure-model",
-                    domain: "Clinical & Cryptographic AI",
-                    task_id: payload.task_id,
-                    overall_urgency: payload.is_critical_flag ? "CRITICAL_STAT_PANIC" : "ELEVATED_RISK",
-                    integrity_status: "DISCORDANT_ANOMALY",
-                    alerts: [
-                        { worker: "InvariantQCWorker", alert: "Primary metric exceeds upper reference bound" },
-                        { worker: "SafetyEscalationWorker", alert: "Critical emergency interlock flag active" }
-                    ],
-                    audit_hash: "HMAC_SHA256_e83f9a72b941d6c381f9"
-                }, null, 2);
-            }
-        }
-    </script>
+<main>
+<header>
+<div class="eyebrow">Clinical prediction research</div>
+<h1>Seattle Heart Failure Model</h1>
+<p class="muted">Original Levy et al. (2006) SHFM score and survival estimates. All calculations run locally in this browser.</p>
+<div class="notice"><strong>Research and education only.</strong> This independent implementation has not undergone clinical validation and is not the University of Washington's updated calculator. Do not use it to diagnose, prescribe, select devices, or make patient-care decisions. Enter de-identified or synthetic values only.</div>
+</header>
+<div class="layout">
+<form id="calculator-form" class="panel" novalidate>
+<h2>Patient characteristics</h2>
+<div class="fields" id="fields"></div>
+<div class="section">
+<h2>Clinical characteristics and therapies already in use</h2>
+<div class="checks" id="checks"></div>
+<div class="field"><label for="device">Existing cardiac device</label>
+<select id="device" name="device"><option value="none">None</option><option value="icd">ICD</option><option value="biv_pacemaker">Biventricular pacemaker</option><option value="biv_icd">Biventricular ICD</option></select></div>
+</div>
+<div class="section actions">
+<button type="submit">Calculate survival</button>
+<button type="button" class="secondary" id="example">Load synthetic example</button>
+<button type="reset" class="secondary">Clear</button>
+</div>
+</form>
+<aside class="panel" aria-live="polite">
+<h2>Survival estimates</h2>
+<div id="result"><p class="muted">Enter all numeric values or load the synthetic example, then select Calculate survival.</p></div>
+<p id="error" role="alert"></p>
+<p class="small muted">Outputs use the original exponential baseline hazard of 0.0405/year. The 5-year value is an extrapolation of the 2006 equation, not the recalibrated SHFM estimate.</p>
+</aside>
+</div>
+<div class="footer">
+<p class="small">Reference: Levy WC et al. <em>The Seattle Heart Failure Model: prediction of survival in heart failure.</em> Circulation. 2006;113:1424–1433. <a href="https://doi.org/10.1161/CIRCULATIONAHA.105.584102" rel="noopener noreferrer">DOI 10.1161/CIRCULATIONAHA.105.584102</a>.</p>
+<p class="small">The model is derived principally from systolic heart failure cohorts; calculated associations are not causal treatment effects. No values are transmitted, stored, or downloaded by this page. <a href="https://github.com/abusuraihsakhri/seattle-heart-failure-model" rel="noopener noreferrer">Source code</a>.</p>
+</div>
+</main>
+<script src="./calculator.js"></script>
+<script>
+'use strict';
+const fields = [
+ ['age','Age (years)',18,120],['sex','Sex',null,null],
+ ['nyha_class','NYHA functional class',1,4],['weight_kg','Body weight (kg)',.000001,500],
+ ['ejection_fraction','LVEF (%)',.000001,100],['systolic_bp','Systolic BP (mmHg)',.000001,300],
+ ['sodium','Serum sodium (mEq/L)',.000001,200],['hemoglobin','Hemoglobin (g/dL)',.000001,25],
+ ['lymphocyte_percent','Lymphocytes (% of WBC)',0,100],['uric_acid','Uric acid (mg/dL)',0,30],
+ ['total_cholesterol','Total cholesterol (mg/dL)',.000001,1000],
+ ['loop_diuretic_mg_day','Loop diuretic (furosemide-equivalent mg/day)',0,1000]
+];
+const booleans = [
+ ['ischemic','Ischemic etiology'],['ace_inhibitor','ACE inhibitor'],
+ ['arb','Angiotensin receptor blocker'],['beta_blocker','Beta blocker'],
+ ['statin','Statin'],['allopurinol','Allopurinol'],
+ ['potassium_sparing_diuretic','Potassium-sparing diuretic']
+];
+const form = document.getElementById('calculator-form');
+const inputArea = document.getElementById('fields');
+for (const [name,label,min,max] of fields) {
+ const wrap=document.createElement('div');wrap.className='field';
+ const lbl=document.createElement('label');lbl.htmlFor=name;lbl.textContent=label;
+ const input=name==='sex'||name==='nyha_class'?document.createElement('select'):document.createElement('input');
+ input.id=name;input.name=name;input.required=true;
+ if(name==='sex'){
+  for(const [v,t] of [['','Select'],['male','Male'],['female','Female']]){const opt=new Option(t,v);input.add(opt);}
+ }else if(name==='nyha_class'){
+  for(const v of ['','1','2','3','4']){const opt=new Option(v||'Select',v);input.add(opt);}
+ }else{input.type='number';input.step='any';input.min=min;input.max=max;input.placeholder='Required';}
+ wrap.append(lbl,input);inputArea.append(wrap);
+}
+const checkArea=document.getElementById('checks');
+for(const [name,label] of booleans){
+ const lbl=document.createElement('label');const input=document.createElement('input');
+ input.type='checkbox';input.name=name;input.id=name;lbl.append(input,document.createTextNode(label));checkArea.append(lbl);
+}
+function collect(){
+ const values={};
+ for(const [name] of fields){
+  const el=form.elements.namedItem(name);
+  if(!el.value.trim())throw new Error('Missing: '+(el.labels[0]?.textContent||name));
+  values[name]=name==='sex'?el.value:Number(el.value);
+ }
+ for(const [name] of booleans)values[name]=form.elements.namedItem(name).checked;
+ values.device=form.elements.namedItem('device').value;
+ return values;
+}
+function clearOutput(){
+ document.getElementById('error').textContent='';
+ document.getElementById('result').textContent='Enter values and calculate to see estimates.';
+}
+form.addEventListener('submit',event=>{
+ event.preventDefault();
+ const out=document.getElementById('result'),error=document.getElementById('error');
+ out.replaceChildren();error.textContent='';
+ try{
+  if(!form.checkValidity()){form.reportValidity();return;}
+  const result=window.SHFMCalculator.calculate(collect());
+  const header=document.createElement('p');header.textContent='SHFM score: '+result.score.toFixed(4);out.append(header);
+  const grid=document.createElement('div');grid.className='result-table';
+  for(const year of [1,2,3,5]){
+   const c=document.createElement('div');c.className='result-card';
+   const lab=document.createElement('span');lab.textContent=year+'-year survival';
+   const num=document.createElement('strong');num.textContent=(100*result.survival[year]).toFixed(1)+'%';
+   c.append(lab,num);grid.append(c);
+  }out.append(grid);
+ }catch(e){error.textContent=e.message;}
+});
+form.addEventListener('reset',()=>setTimeout(clearOutput,0));
+document.getElementById('example').addEventListener('click',()=>{
+ const example={age:60,sex:'male',nyha_class:2,weight_kg:80,ejection_fraction:30,systolic_bp:120,
+ sodium:140,hemoglobin:14,lymphocyte_percent:25,uric_acid:6,total_cholesterol:180,
+ loop_diuretic_mg_day:0,ischemic:false,ace_inhibitor:true,arb:false,beta_blocker:true,
+ statin:false,allopurinol:false,potassium_sparing_diuretic:false,device:'none'};
+ for(const [name] of fields)form.elements.namedItem(name).value=String(example[name]);
+ for(const [name] of booleans)form.elements.namedItem(name).checked=example[name];
+ form.elements.namedItem('device').value=example.device;
+ clearOutput();
+});
+</script>
 </body>
 </html>
