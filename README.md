@@ -1,254 +1,88 @@
 # Seattle Heart Failure Model
 
-> **Domain:** Clinical Decision Support & Biomedical Computing
-> **Reference Guidelines & Standards:** Standard Clinical Formulations & ISO/IEC Quality Frameworks
+Independent, educational implementation of the **original 2006 Seattle Heart Failure Model (SHFM)** survival equation. Includes a local browser calculator, Python library, CLI, and FastAPI endpoint. This is **not** the official or later-recalibrated University of Washington calculator.
 
-<div align="center">
+> **Clinical limitation:** Research and education only. This implementation has not undergone independent clinical validation, regulatory review, or external calibration. Do not use it for patient-care or treatment decisions. Only enter de-identified or synthetic data.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## Use in the browser
 
-</div>
+Open `web/index.html` in a modern browser, or serve the `web/` directory as a static site. The calculator runs entirely in JavaScript, without an API, cookies, or persistence. No clinical input is sent over the network by the calculator. A GitHub Pages deployment workflow is provided; availability of a public live URL must be verified independently.
 
----
+Choose **Load synthetic example** to reproduce the reference scenario (score approximately −0.1089; one-year survival approximately 96.43%). All required numerical predictors must otherwise be supplied explicitly. Results include 1-, 2-, 3-, and 5-year survival.
 
-## 📖 What It Does
+## Python installation
 
-Seattle Heart Failure Model (SHFM) Calculator
-
-Predicts 1-year mortality in chronic heart failure patients.
-The SHFM uses a multivariate Cox proportional hazards model to estimate
-survival based on clinical, laboratory, medication, and device variables.
-
-References:
-- Levy WC, Mozaffarian D, Linker DT, et al. The Seattle Heart Failure Model:
-  Prediction of Survival Without and with Therapies. Circulation. 2006;114(16):1659-1666.
-- Mozaffarian D, Anker SD, Anand I, et al. Prediction of mode of death in heart
-  failure: the Seattle Heart Failure Model. Circulation. 2007;116(4):392-398.
-
-Author: Medical Calculator Project
-License: MIT
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Analytical Functions
-
-- **`calculate_shfm_points()`**: Calculate the Seattle Heart Failure Model score.
-
-The SHFM linear predictor (sum_points) is calculated as:
-sum = beta_age * age + beta_nyha * nyha + beta_ef * ef + ...
-
-Survival is then: S(t) = S0(t) ^ exp(sum_points - mean_points)
-1-year mortality = 1 - S(1)
-
-Args:
-    age: Age in years (0-150)
-    sex: "male" or "female"
-    nyha_class: NYHA functional class (1-4)
-    weight_kg: Body weight in kg (0-500)
-    ischemic: Ischemic etiology
-    ejection_fraction: LVEF in % (0-100)
-    systolic_bp: Systolic BP in mmHg (0-300)
-    diastolic_bp: Diastolic BP in mmHg (0-200)
-    sodium: Serum sodium in mEq/L (0-200)
-    creatinine: Serum creatinine in mg/dL (0-30)
-    hemoglobin: Hemoglobin in g/dL (0-25)
-    lymphocytes: Lymphocyte count in 1000 cells/uL (0-20)
-    uric_acid: Uric acid in mg/dL (0-30)
-    bun: Blood urea nitrogen in mg/dL (0-200)
-    acei_arb: On ACE inhibitor or ARB
-    beta_blocker: On beta-blocker
-    statin: On statin
-    allopurinol: On allopurinol
-    icd: Has ICD
-    crt: Has CRT (CRT-D or CRT-P)
-    lvad: Has LVAD
-
-Returns:
-    Dictionary with SHFM results
-
-- **`calculate_therapy_benefit()`**: Calculate the benefit of adding a therapy to the current regimen.
-
-Args:
-    base_result: Result from calculate_shfm_points (current regimen)
-    therapy: Name of therapy to add
-    **therapy_params: Additional parameters for recalculation
-
-Returns:
-    Dictionary with therapy benefit analysis
-
----
-
-## 📐 Mathematical Formulation & Logic
-
-```text
-Calculate the Seattle Heart Failure Model score.
-The SHFM linear predictor (sum_points) is calculated as:
-Calculate linear predictor (sum of points)
-Calculate survival using: S(t) = S0(t) ^ exp(sum_points - mean_points)
-Calculate the benefit of adding a therapy to the current regimen.
-```
-
----
-
-## 💻 Installation
+Requires Python 3.10 or later.
 
 ```bash
-# Clone the repository
 git clone https://github.com/abusuraihsakhri/seattle-heart-failure-model.git
 cd seattle-heart-failure-model
-
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -e ".[dev]"
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+python -m pytest -q
+node --test tests/test_browser_model.cjs
 ```
 
----
-
-## 💻 CLI Quickstart & Usage
-
-### 1. Calculate SHFM Score
-```bash
-python cli.py calculate --age 65 --ef 35 --nyha 2
-```
-
-### 2. Calculate with Medications
-```bash
-python cli.py calculate --age 65 --ef 25 --nyha 3 --acei-arb --beta-blocker --statin
-```
-
-### 3. Therapy Benefit Analysis
-```bash
-python cli.py therapy --therapy beta_blocker --age 65 --ef 25 --nyha 3
-```
-
-### 4. Enterprise Audit Operations
-```bash
-# Run audit task evaluation
-python cli.py audit --task-id TASK-001
-
-# Query supervisory chat
-python cli.py chat "Explain heart failure risk"
-
-# Verify HMAC audit trail integrity
-python cli.py verify-audit
-```
-
-### 5. JSON Output
-```bash
-python cli.py --json calculate --age 65 --ef 35 --nyha 2
-```
-
-### Parameter Reference
-- `--json`: Also output JSON result
-- `--age`: Age in years (0-150)
-- `--sex`: "male" or "female"
-- `--nyha`: NYHA functional class (1-4)
-- `--weight`: Weight in kg (0-500)
-- `--ischemic`: Ischemic etiology flag
-- `--ef`: Ejection fraction % (0-100)
-- `--sbp`: Systolic BP mmHg (0-300)
-- `--dbp`: Diastolic BP mmHg (0-200)
-- `--sodium`: Serum sodium mEq/L (0-200)
-- `--creatinine`: Creatinine mg/dL (0-30)
-- `--hemoglobin`: Hemoglobin g/dL (0-25)
-- `--lymphocytes`: Lymphocytes (1000/uL) (0-20)
-- `--uric-acid`: Uric acid mg/dL (0-30)
-- `--bun`: BUN mg/dL (0-200)
-- `--acei-arb`: On ACEi/ARB
-- `--beta-blocker`: On beta-blocker
-- `--statin`: On statin
-- `--allopurinol`: On allopurinol
-- `--icd`: Has ICD
-- `--crt`: Has CRT
-- `--lvad`: Has LVAD
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+Run the API and local web frontend:
 
 ```bash
-pytest -v
+uvicorn agents.api:app --reload
+# Open http://127.0.0.1:8000/
+# Interactive documentation: http://127.0.0.1:8000/docs
 ```
 
-Execute high-throughput batch simulation benchmarks:
+Start a standalone static server instead:
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python -m http.server 8080 --directory web
+# Open http://127.0.0.1:8080/
 ```
 
----
+For the CLI, run `python cli.py calculate --help`. Unlike earlier versions, the original SHFM predictors are **required** rather than silently imputed. Example:
 
-## 🐳 Container Deployment
+```bash
+python cli.py calculate \
+  --age 60 --sex male --nyha 2 --ef 30 --sbp 120 \
+  --sodium 140 --hemoglobin 14 --lymphocyte-percent 25 \
+  --uric-acid 6 --total-cholesterol 180 --weight 80 \
+  --loop-diuretic-mg-day 0 --ace-inhibitor --beta-blocker
+```
 
-### Docker
+The installed `shfm` command accepts the same options. For the REST API, send the equivalent JSON predictor fields to `POST /api/calculate`. The schema is available in FastAPI's generated `/openapi.json`.
+
+## Calculation and scope
+
+The original SHFM Cox score is the sum of published log-hazard-ratio contributions, with estimated survival at time `t` years:
+
+```text
+SHFM score = sum[ln(hazard ratio) × covariate]
+S(t) = exp[-0.0405 × t × exp(SHFM score)]
+```
+
+The implementation includes age, sex, NYHA, systolic pressure, LVEF, ischemic etiology, loop-diuretic dose per kg, laboratory predictors (sodium, cholesterol, hemoglobin, **lymphocyte percentage**, uric acid), and medication/device associations from the original model. Required diuretic input is oral **furosemide-equivalent mg/day**; divide by the entered weight in kg to obtain the model covariate. Furosemide 80 mg, torsemide 40 mg, and bumetanide 3 mg are the original source's approximate dose equivalences.
+
+The original model truncates systolic blood pressure above 160 mmHg and lymphocyte percentage above 47%; sodium contributes only below 138 mEq/L. The 5-year result is **extrapolated** from the original constant-hazard equation and is **not** the revised University of Washington 5-year estimate. The displayed low/moderate/high/very-high categories are informal mortality bands, not published validated SHFM strata.
+
+The original observational coefficients **must not** be interpreted as causal treatment efficacy. CLI therapy comparisons are mathematical scenarios, not recommendations. Statin or LVAD scenarios are deliberately excluded; the University of Washington later revised its treatment and device assumptions. The patient selection and calibration of the original study do not necessarily generalize to contemporary care, HFpEF, hospitalized patients, or different populations.
+
+Reference: Levy WC, Mozaffarian D, Linker DT, et al. The Seattle Heart Failure Model: prediction of survival in heart failure. *Circulation*. 2006;113(11):1424–1433. [doi:10.1161/CIRCULATIONAHA.105.584102](https://doi.org/10.1161/CIRCULATIONAHA.105.584102). See also the [University of Washington model update notes](https://depts.washington.edu/shfm/update.php).
+
+## Other repository components
+
+The `agents/` folder retains an independent, **generic rule-based demonstration** with `audit`, `chat`, and `verify-audit` CLI commands and their corresponding API endpoints. It does not constitute a clinically validated multi-agent SHFM inference engine. Chat responses are deterministic placeholders, not real LLM outputs.
+
+The audit demonstration signs each record with HMAC-SHA256 and verifies its chain within the current process. It is **in-memory only**; restarting discards records. When no `AUDIT_SECRET_KEY` is supplied, a fresh random per-process key is generated. Its pattern-based identifier screening is incomplete and **must not** be described as HIPAA de-identification or PHI-safe clinical storage. Do not submit identifiable data to API or demonstration endpoints.
+
+## Docker and testing
+
 ```bash
 docker build -t seattle-heart-failure-model .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secret-key seattle-heart-failure-model
+docker run --rm -p 8000:8000 seattle-heart-failure-model
 ```
 
-### Docker Compose
-```bash
-# Copy environment template
-cp .env.example .env
-# Edit .env to set AUDIT_SECRET_KEY
+`docker compose up --build` is also supported. The application serves the UI at `/`, JSON API at `/api/calculate`, and health endpoint at `/health`. GitHub Actions runs Python tests across 3.10–3.12 and Node browser-math tests. The static application requires only JavaScript and works in current Chrome, Firefox, Edge, and Safari; browser compatibility has not been formally certified.
 
-docker-compose up -d
-```
+## License
 
----
-
-## 📁 Project Structure
-
-```
-seattle-heart-failure-model/
-├── shfm_calc.py          # Core SHFM calculation engine
-├── cli.py                # Command-line interface
-├── simulator.py          # High-throughput stress testing simulator
-├── enrichment.py         # Enrichment feature engines
-├── pyproject.toml        # Python project configuration
-├── Dockerfile            # Container build configuration
-├── docker-compose.yml    # Multi-container orchestration
-├── agents/               # Enterprise agent framework
-│   ├── __init__.py
-│   ├── base.py           # PHI guard, HMAC audit trail
-│   ├── models.py         # Pydantic data models
-│   ├── supervisor.py     # Multi-agent orchestrator
-│   ├── workers.py        # Specialized domain workers
-│   ├── llm_factory.py    # LLM provider factory
-│   ├── api.py            # FastAPI REST endpoints
-│   ├── learning.py       # Bayesian calibration engine
-│   ├── metrics.py        # Prometheus metrics exporter
-│   └── streamer.py       # WebSocket telemetry broadcaster
-├── tests/                # Test suite
-│   ├── test_enrichment.py
-│   └── test_seattle_heart_failure_model.py
-├── test_shfm_calc.py     # Core calculation tests
-├── web/                  # Web operations console
-│   └── index.html
-├── openapi_spec.json     # OpenAPI 3.1 specification
-├── sample.csv            # Sample patient data
-├── benchmark_dataset.json # Golden benchmark test suite
-└── .env.example          # Environment variable template
-```
+[MIT](LICENSE).
