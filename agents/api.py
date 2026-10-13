@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from shfm_calc import calculate_shfm_points
-from .base import AuditLogger
+from .base import AuditLogger, SecurityException
 from .models import SystemTaskPayload
 from .supervisor import SystemSupervisor
 
@@ -79,7 +79,10 @@ def api_calculate(payload: SHFMRequest):
 @app.post("/api/audit")
 def api_audit(payload: SystemTaskPayload):
     # This legacy rule demo is unrelated to the SHFM prognosis engine.
-    return supervisor.process_task(payload).to_dict()
+    try:
+        return supervisor.process_task(payload).to_dict()
+    except SecurityException as exc:
+        raise HTTPException(status_code=422, detail="Potential identifying information rejected") from exc
 
 
 @app.post("/api/chat")
@@ -87,6 +90,8 @@ def api_chat(req: ChatRequest):
     try:
         return {"response": supervisor.query_supervisory_chat(req.query),
                 "note": "Deterministic placeholder response, not a medical interpretation."}
+    except SecurityException as exc:
+        raise HTTPException(status_code=422, detail="Potential identifying information rejected") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
