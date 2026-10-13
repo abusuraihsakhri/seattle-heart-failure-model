@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seattle-heart-failure-model"
-version = "3.0.0"
-description = "Seattle Heart Failure Model (SHFM) Calculator — Predicts 1-year mortality in chronic heart failure patients."
+version = "3.1.0"
+description = "Research implementation of the original 2006 Seattle Heart Failure Model."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -20,7 +20,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 dependencies = [
     "fastapi>=0.111",
@@ -32,10 +31,14 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "httpx>=0.27",
 ]
 
 [project.scripts]
 shfm = "cli:main"
+
+[tool.setuptools]
+py-modules = ["shfm_calc", "cli", "enrichment", "simulator"]
 
 [tool.setuptools.packages.find]
 include = ["agents*"]
