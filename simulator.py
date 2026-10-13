@@ -33,7 +33,11 @@ def process_single_task(supervisor: SystemSupervisor, i: int) -> str:
 
 def run_simulation(iterations: int = 100, concurrency: int = 1):
     """Run simulation with configurable concurrency."""
-    print(f"Starting Distributed Component Simulation on Seattle Heart Failure Model ({iterations} tasks, concurrency={concurrency})...")
+    if not isinstance(iterations, int) or not 1 <= iterations <= 100000:
+        raise ValueError("iterations must be an integer between 1 and 100000")
+    if not isinstance(concurrency, int) or not 1 <= concurrency <= 32:
+        raise ValueError("concurrency must be an integer between 1 and 32")
+    print(f"Starting generic rule-engine simulation ({iterations} tasks, concurrency={concurrency})...")
     supervisor = SystemSupervisor(model_provider="mock")
     start_time = time.time()
     nominal_count = 0
@@ -81,7 +85,7 @@ def run_simulation(iterations: int = 100, concurrency: int = 1):
 
     elapsed = time.time() - start_time
     print("\n" + "=" * 70)
-    print(f"  SIMULATION SUMMARY FOR SEATTLE HEART FAILURE MODEL")
+    print(f"  GENERIC RULE DEMONSTRATION — SIMULATION SUMMARY")
     print("=" * 70)
     print(f"  Total Tasks Processed:     {iterations}")
     print(f"  Concurrency:               {concurrency}")
@@ -89,7 +93,7 @@ def run_simulation(iterations: int = 100, concurrency: int = 1):
     print(f"  Routine Outcomes:          {nominal_count} ({nominal_count/iterations*100:.1f}%)")
     print(f"  Elevated Risk Outcomes:    {elevated_count} ({elevated_count/iterations*100:.1f}%)")
     print(f"  Critical Interventions:    {critical_count} ({critical_count/iterations*100:.1f}%)")
-    print(f"  Adversarial PHI Intercepts:{phi_blocked_count} (100% Interception Rate)")
+    print(f"  Synthetic identifier pattern detections: {phi_blocked_count}")
     print(f"  HMAC Audit Ledger Blocks:  {len(AuditLogger.get_trail())}")
     print(f"  HMAC Cryptographic Check:  {AuditLogger.verify_integrity()}")
     print("=" * 70)

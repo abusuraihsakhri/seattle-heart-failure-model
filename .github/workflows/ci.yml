@@ -1,40 +1,36 @@
-name: Seattle Heart Failure Model CI/CD & Security Verification
+name: Test and verify
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master, main]
   pull_request:
-    branches: [ master, main ]
+    branches: [master, main]
+
+permissions:
+  contents: read
 
 jobs:
-  test-and-audit:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
-
-    - name: Run Pytest Suite
-      run: |
-        pytest -v
-
-    - name: Security SAST & Zero-PHI Audit
-      run: |
-        python -c "
-        from agents.base import PHIGuard, AuditLogger
-        import pytest
-        assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
-        "
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Check package dependency consistency
+        run: python -m pip check
+      - name: Python compilation
+        run: python -m compileall -q agents cli.py shfm_calc.py enrichment.py simulator.py
+      - name: Python tests
+        run: python -m pytest -q
+      - name: Browser script syntax and reference tests
+        run: |
+          node --check web/calculator.js
+          python -c "from pathlib import Path; h=Path('web/index.html').read_text(); Path('/tmp/shfm-inline.js').write_text(h.split('<script>')[-1].split('</script>')[0])"
+          node --check /tmp/shfm-inline.js
+          node --test tests/test_browser_model.cjs

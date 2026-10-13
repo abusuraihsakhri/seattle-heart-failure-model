@@ -3,6 +3,8 @@ Enterprise Security, PHI Outbound Guard, and HMAC-SHA256 Audit Trail.
 
 """
 import os
+import secrets
+import threading
 import re
 import json
 import time
@@ -24,7 +26,7 @@ PHI_PATTERNS = [
 
 
 class SecurityException(Exception):
-    """Raised when outbound data violates HIPAA Safe Harbor or contains raw PHI."""
+    """Raised when a configured identifier pattern is detected."""
     pass
 
 
@@ -57,11 +59,21 @@ class PHIGuard:
 class AuditTrail:
     """Cryptographic Tamper-Evident HMAC-SHA256 Audit Trail."""
     def __init__(self, secret_key: Optional[str] = None):
-        self.secret_key = (secret_key or os.getenv("AUDIT_SECRET_KEY", "seattle-heart-failure-model-master-audit-key-2026")).encode("utf-8")
+        # Use a random per-process secret when no configured key is available.
+        # In-memory records cannot be verified after a process restart.
+        configured_key = secret_key if secret_key is not None else os.getenv("AUDIT_SECRET_KEY")
+        self.secret_key = (configured_key if configured_key else secrets.token_hex(32)).encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
+        self._lock = threading.RLock()
 
     def log(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
-        payload_str = json.dumps(details, sort_keys=True)
+        with self._lock:
+            return self._log_locked(actor, actor_tier, event_type, details)
+
+    def _log_locked(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
+        payload_str = json.dumps(details, sort_keys=True, allow_nan=False)
+        for field in (actor, actor_tier, event_type):
+            assert_no_phi(field)
         assert_no_phi(payload_str)
         payload_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
         audit_id = f"AUDIT-{int(time.time()*1000)}-{len(self.logs)+1}"
@@ -83,14 +95,28 @@ class AuditTrail:
         return entry
 
     def verify_integrity(self) -> bool:
-        for i, entry in enumerate(self.logs):
-            prev = self.logs[i-1]["current_hash"] if i > 0 else "GENESIS_BLOCK_0000000000000000"
-            if entry["prev_hash"] != prev:
+        with self._lock:
+            return self._verify_integrity_locked()
+
+    def _verify_integrity_locked(self) -> bool:
+        prev = "GENESIS_BLOCK_0000000000000000"
+        for entry in self.logs:
+            try:
+                if entry["prev_hash"] != prev:
+                    return False
+                signed = "|".join(str(entry[k]) for k in
+                    ("audit_id", "timestamp", "actor", "actor_tier", "event_type", "payload_hash", "prev_hash"))
+                expected = hmac.new(self.secret_key, signed.encode("utf-8"), hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected, entry["current_hash"]):
+                    return False
+                prev = entry["current_hash"]
+            except (KeyError, TypeError):
                 return False
         return True
 
     def get_trail(self) -> List[Dict[str, Any]]:
-        return self.logs
+        with self._lock:
+            return [dict(entry) for entry in self.logs]
 
 
 GLOBAL_AUDIT = AuditTrail()

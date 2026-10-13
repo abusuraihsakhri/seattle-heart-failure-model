@@ -1,382 +1,158 @@
-#!/usr/bin/env python3
+"""Original (2006) Seattle Heart Failure Model, using Levy et al. Table 2.
+
+This is a research implementation, not the revised UW web calculator or a
+validated clinical decision support device. All required predictors are explicit.
+DOI: 10.1161/CIRCULATIONAHA.105.584102
 """
-Seattle Heart Failure Model (SHFM) Calculator
-
-Predicts 1-year mortality in chronic heart failure patients.
-The SHFM uses a multivariate Cox proportional hazards model to estimate
-survival based on clinical, laboratory, medication, and device variables.
-
-References:
-- Levy WC, Mozaffarian D, Linker DT, et al. The Seattle Heart Failure Model:
-  Prediction of Survival Without and with Therapies. Circulation. 2006;114(16):1659-1666.
-- Mozaffarian D, Anker SD, Anand I, et al. Prediction of mode of death in heart
-  failure: the Seattle Heart Failure Model. Circulation. 2007;116(4):392-398.
-
-Author: Medical Calculator Project
-License: MIT
-"""
+from __future__ import annotations
 
 import math
-from typing import Dict, Any, Optional
+from typing import Any
 
-
-# =============================================================================
-# SHFM COEFFICIENTS (from Levy et al. 2006)
-# =============================================================================
-
-# Baseline survival at 1 year (S0(1)) from the original derivation
-# These are the published baseline hazard/survival values
-BASELINE_1YEAR_SURVIVAL = 0.970  # S0(1) from the SHFM paper
-BASELINE_2YEAR_SURVIVAL = 0.936
-BASELINE_5YEAR_SURVIVAL = 0.830
-
-# Mean linear predictor in the derivation cohort
-# This is the average sum_points for the original SHFM cohort
-# (average age ~60, EF ~30%, NYHA ~2.3, Na ~137, Cr ~1.4, Hgb ~12.5)
-# Required so that S(t) = S0(t)^exp(LP - mean_LP) produces clinically
-# plausible mortality estimates for typical HF patients.
-MEAN_POINTS = -15.0
-
-# Coefficients for the linear predictor (sum of points)
-COEFFICIENTS = {
-    # Demographics
-    "age": -0.0246,           # per year of age
-    "sex_male": 0.0,          # male = reference (0)
-    "sex_female": 0.0,        # female coefficient (effectively 0 in original model)
-    "weight_kg": -0.0165,     # per kg
-
-    # NYHA class
-    "nyha_1": 0.0,            # NYHA I = reference
-    "nyha_2": 0.7,            # NYHA II
-    "nyha_3": 1.5,            # NYHA III
-    "nyha_4": 2.4,            # NYHA IV
-
-    # Etiology
-    "ischemic": 0.3,          # ischemic etiology
-
-    # Ejection fraction
-    "ejection_fraction": -0.0205,  # per %
-
-    # Blood pressure
-    "systolic_bp": -0.0174,   # per mmHg
-    "diastolic_bp": -0.0118,  # per mmHg
-
-    # Laboratory values
-    "sodium": -0.0499,        # per mEq/L
-    "creatinine": 0.56,       # per mg/dL
-    "hemoglobin": -0.24,      # per g/dL
-    "lymphocytes": -0.52,     # per 1000 cells/uL
-    "uric_acid": 0.006,       # per mg/dL
-    "bun": 0.012,             # per mg/dL
-
-    # Medications (benefit coefficients - negative = beneficial)
-    "acei_arb": -0.18,        # ACE inhibitor or ARB
-    "beta_blocker": -0.27,    # Beta-blocker
-    "statin": -0.15,          # Statin
-    "allopurinol": -0.14,     # Allopurinol
-
-    # Devices (benefit coefficients)
-    "icd": -0.16,             # Implantable cardioverter-defibrillator
-    "crt": -0.22,             # Cardiac resynchronization therapy
-    "lvad": -0.70,            # Left ventricular assist device
+BASELINE_HAZARD_PER_YEAR = 0.0405
+HAZARD_RATIOS = {
+    "age_per_decade": 1.090, "male": 1.089, "nyha_class": 1.600,
+    "inverse_ef": 1.030, "ischemic": 1.354,
+    "sbp_per_10": 0.877, "loop_diuretic_mg_kg_day": 1.178,
+    "allopurinol": 1.571, "sodium_below_138": 1.050,
+    "inverse_cholesterol": 2.206, "hemoglobin_below_16": 1.124,
+    "hemoglobin_above_16": 1.336, "lymphocyte_pct_per_5": 0.897,
+    "uric_acid": 1.064, "ace_inhibitor": 0.77,
+    "beta_blocker": 0.66, "arb": 0.85,
+    "potassium_sparing_diuretic": 0.74, "statin": 0.63,
+    "icd": 0.73, "biv_pacemaker": 1.00, "biv_icd": 0.79,
 }
+DEVICE_TYPES = ("none", "icd", "biv_pacemaker", "biv_icd")
 
 
-# =============================================================================
-# CORE CALCULATION
-# =============================================================================
+def _number(label: str, value: float, minimum: float, maximum: float, *, inclusive_min: bool = True) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a numeric value")
+    value = float(value)
+    if not math.isfinite(value) or value > maximum or (value < minimum if inclusive_min else value <= minimum):
+        op = ">=" if inclusive_min else ">"
+        raise ValueError(f"{label} must be finite and {op} {minimum} and <= {maximum}")
+    return value
+
 
 def calculate_shfm_points(
-    age: float,
-    sex: str = "male",
-    nyha_class: int = 2,
-    weight_kg: float = 80.0,
-    ischemic: bool = False,
-    ejection_fraction: float = 35.0,
-    systolic_bp: float = 120.0,
-    diastolic_bp: float = 80.0,
-    sodium: float = 140.0,
-    creatinine: float = 1.2,
-    hemoglobin: float = 13.0,
-    lymphocytes: float = 1.5,
-    uric_acid: float = 6.0,
-    bun: float = 20.0,
-    acei_arb: bool = False,
-    beta_blocker: bool = False,
-    statin: bool = False,
-    allopurinol: bool = False,
-    icd: bool = False,
-    crt: bool = False,
-    lvad: bool = False,
-) -> Dict[str, Any]:
+    *, age: float, sex: str, nyha_class: int, ischemic: bool,
+    ejection_fraction: float, systolic_bp: float, sodium: float,
+    hemoglobin: float, lymphocyte_percent: float, uric_acid: float,
+    total_cholesterol: float, weight_kg: float, loop_diuretic_mg_day: float,
+    ace_inhibitor: bool = False, arb: bool = False,
+    beta_blocker: bool = False, statin: bool = False,
+    allopurinol: bool = False, potassium_sparing_diuretic: bool = False,
+    device: str = "none",
+) -> dict[str, Any]:
+    """Return the original-model score and 1/2/3/5-year estimates.
+
+    loop_diuretic_mg_day is oral furosemide-equivalent mg/day, based on the
+    original paper's conversion (furosemide 80 = torsemide 40 = bumetanide 3).
+    Five-year output extrapolates the original constant hazard model; it is
+    *not* the 2013-recalibrated University of Washington five-year estimate.
     """
-    Calculate the Seattle Heart Failure Model score.
-    
-    The SHFM linear predictor (sum_points) is calculated as:
-    sum = beta_age * age + beta_nyha * nyha + beta_ef * ef + ...
-    
-    Survival is then: S(t) = S0(t) ^ exp(sum_points - mean_points)
-    1-year mortality = 1 - S(1)
-    
-    Args:
-        age: Age in years
-        sex: "male" or "female"
-        nyha_class: NYHA functional class (1-4)
-        weight_kg: Body weight in kg
-        ischemic: Ischemic etiology
-        ejection_fraction: LVEF in %
-        systolic_bp: Systolic BP in mmHg
-        diastolic_bp: Diastolic BP in mmHg
-        sodium: Serum sodium in mEq/L
-        creatinine: Serum creatinine in mg/dL
-        hemoglobin: Hemoglobin in g/dL
-        lymphocytes: Lymphocyte count in 1000 cells/uL
-        uric_acid: Uric acid in mg/dL
-        bun: Blood urea nitrogen in mg/dL
-        acei_arb: On ACE inhibitor or ARB
-        beta_blocker: On beta-blocker
-        statin: On statin
-        allopurinol: On allopurinol
-        icd: Has ICD
-        crt: Has CRT (CRT-D or CRT-P)
-        lvad: Has LVAD
-    
-    Returns:
-        Dictionary with SHFM results
-    """
-    # Validate inputs
-    if nyha_class not in (1, 2, 3, 4):
-        raise ValueError("NYHA class must be 1, 2, 3, or 4")
-    if sex.lower() not in ("male", "female"):
+    age = _number("age", age, 18, 120)
+    weight_kg = _number("weight_kg", weight_kg, 0, 500, inclusive_min=False)
+    ejection_fraction = _number("ejection_fraction", ejection_fraction, 0, 100, inclusive_min=False)
+    systolic_bp = _number("systolic_bp", systolic_bp, 0, 300, inclusive_min=False)
+    sodium = _number("sodium", sodium, 0, 200, inclusive_min=False)
+    hemoglobin = _number("hemoglobin", hemoglobin, 0, 25, inclusive_min=False)
+    lymphocyte_percent = _number("lymphocyte_percent", lymphocyte_percent, 0, 100)
+    uric_acid = _number("uric_acid", uric_acid, 0, 30)
+    total_cholesterol = _number("total_cholesterol", total_cholesterol, 0, 1000, inclusive_min=False)
+    loop_diuretic_mg_day = _number("loop_diuretic_mg_day", loop_diuretic_mg_day, 0, 1000)
+    if not isinstance(sex, str) or sex.lower() not in ("male", "female"):
         raise ValueError("sex must be 'male' or 'female'")
-    if age < 0 or age > 150:
-        raise ValueError("age must be between 0 and 150")
-    if weight_kg < 0 or weight_kg > 500:
-        raise ValueError("weight_kg must be between 0 and 500")
-    if ejection_fraction < 0 or ejection_fraction > 100:
-        raise ValueError("ejection_fraction must be between 0 and 100")
-    if systolic_bp < 0 or systolic_bp > 300:
-        raise ValueError("systolic_bp must be between 0 and 300")
-    if diastolic_bp < 0 or diastolic_bp > 200:
-        raise ValueError("diastolic_bp must be between 0 and 200")
-    if sodium < 0 or sodium > 200:
-        raise ValueError("sodium must be between 0 and 200")
-    if creatinine < 0 or creatinine > 30:
-        raise ValueError("creatinine must be between 0 and 30")
-    if hemoglobin < 0 or hemoglobin > 25:
-        raise ValueError("hemoglobin must be between 0 and 25")
-    if lymphocytes < 0 or lymphocytes > 20:
-        raise ValueError("lymphocytes must be between 0 and 20")
-    if uric_acid < 0 or uric_acid > 30:
-        raise ValueError("uric_acid must be between 0 and 30")
-    if bun < 0 or bun > 200:
-        raise ValueError("bun must be between 0 and 200")
-    
-    # Calculate linear predictor (sum of points)
-    points = 0.0
-    point_breakdown = {}
-    
-    # Age contribution (coefficient is negative per the SHFM, but in the
-    # survival function S(t)=S0(t)^exp(LP), a more negative LP yields higher
-    # survival.  Since older age should give WORSE survival, we negate the
-    # age contribution so that increasing age increases the hazard.)
-    age_points = -COEFFICIENTS["age"] * age
-    point_breakdown["age"] = round(age_points, 4)
-    points += age_points
-    
-    # NYHA class
-    nyha_key = f"nyha_{nyha_class}"
-    nyha_points = COEFFICIENTS[nyha_key]
-    point_breakdown["nyha_class"] = round(nyha_points, 4)
-    points += nyha_points
-    
-    # Weight
-    weight_points = COEFFICIENTS["weight_kg"] * weight_kg
-    point_breakdown["weight"] = round(weight_points, 4)
-    points += weight_points
-    
-    # Ischemic etiology
-    if ischemic:
-        iso_points = COEFFICIENTS["ischemic"]
-        point_breakdown["ischemic"] = round(iso_points, 4)
-        points += iso_points
-    
-    # Ejection fraction
-    ef_points = COEFFICIENTS["ejection_fraction"] * ejection_fraction
-    point_breakdown["ejection_fraction"] = round(ef_points, 4)
-    points += ef_points
-    
-    # Blood pressure
-    sbp_points = COEFFICIENTS["systolic_bp"] * systolic_bp
-    dbp_points = COEFFICIENTS["diastolic_bp"] * diastolic_bp
-    point_breakdown["systolic_bp"] = round(sbp_points, 4)
-    point_breakdown["diastolic_bp"] = round(dbp_points, 4)
-    points += sbp_points + dbp_points
-    
-    # Laboratory values
-    na_points = COEFFICIENTS["sodium"] * sodium
-    cr_points = COEFFICIENTS["creatinine"] * creatinine
-    hgb_points = COEFFICIENTS["hemoglobin"] * hemoglobin
-    lym_points = COEFFICIENTS["lymphocytes"] * lymphocytes
-    ua_points = COEFFICIENTS["uric_acid"] * uric_acid
-    bun_points = COEFFICIENTS["bun"] * bun
-    
-    point_breakdown["sodium"] = round(na_points, 4)
-    point_breakdown["creatinine"] = round(cr_points, 4)
-    point_breakdown["hemoglobin"] = round(hgb_points, 4)
-    point_breakdown["lymphocytes"] = round(lym_points, 4)
-    point_breakdown["uric_acid"] = round(ua_points, 4)
-    point_breakdown["bun"] = round(bun_points, 4)
-    
-    points += na_points + cr_points + hgb_points + lym_points + ua_points + bun_points
-    
-    # Medications
-    med_points = 0.0
-    if acei_arb:
-        med_points += COEFFICIENTS["acei_arb"]
-        point_breakdown["acei_arb"] = round(COEFFICIENTS["acei_arb"], 4)
-    if beta_blocker:
-        med_points += COEFFICIENTS["beta_blocker"]
-        point_breakdown["beta_blocker"] = round(COEFFICIENTS["beta_blocker"], 4)
-    if statin:
-        med_points += COEFFICIENTS["statin"]
-        point_breakdown["statin"] = round(COEFFICIENTS["statin"], 4)
-    if allopurinol:
-        med_points += COEFFICIENTS["allopurinol"]
-        point_breakdown["allopurinol"] = round(COEFFICIENTS["allopurinol"], 4)
-    point_breakdown["medications_total"] = round(med_points, 4)
-    points += med_points
-    
-    # Devices
-    device_points = 0.0
-    if icd:
-        device_points += COEFFICIENTS["icd"]
-        point_breakdown["icd"] = round(COEFFICIENTS["icd"], 4)
-    if crt:
-        device_points += COEFFICIENTS["crt"]
-        point_breakdown["crt"] = round(COEFFICIENTS["crt"], 4)
-    if lvad:
-        device_points += COEFFICIENTS["lvad"]
-        point_breakdown["lvad"] = round(COEFFICIENTS["lvad"], 4)
-    point_breakdown["devices_total"] = round(device_points, 4)
-    points += device_points
-    
-    # Calculate survival using: S(t) = S0(t) ^ exp(sum_points - mean_points)
-    exponent = math.exp(points - MEAN_POINTS)
-    
-    survival_1yr = BASELINE_1YEAR_SURVIVAL ** exponent
-    survival_2yr = BASELINE_2YEAR_SURVIVAL ** exponent
-    survival_5yr = BASELINE_5YEAR_SURVIVAL ** exponent
-    
-    mortality_1yr = 1.0 - survival_1yr
-    mortality_2yr = 1.0 - survival_2yr
-    mortality_5yr = 1.0 - survival_5yr
-    
-    # Risk classification
-    if mortality_1yr < 0.05:
-        risk_class = "Low risk"
-        risk_description = "1-year mortality <5%"
-    elif mortality_1yr < 0.15:
-        risk_class = "Moderate risk"
-        risk_description = "1-year mortality 5-15%"
-    elif mortality_1yr < 0.30:
-        risk_class = "High risk"
-        risk_description = "1-year mortality 15-30%"
-    else:
-        risk_class = "Very high risk"
-        risk_description = "1-year mortality >30%"
-    
+    if type(nyha_class) is not int or nyha_class not in (1, 2, 3, 4):
+        raise ValueError("nyha_class must be an integer from 1 to 4")
+    if device not in DEVICE_TYPES:
+        raise ValueError(f"device must be one of: {', '.join(DEVICE_TYPES)}")
+    flags = ("ischemic", "ace_inhibitor", "arb", "beta_blocker", "statin",
+             "allopurinol", "potassium_sparing_diuretic")
+    for name in flags:
+        if type(locals()[name]) is not bool:
+            raise ValueError(f"{name} must be a boolean")
+
+    contributions = {
+        "age": (age / 10) * math.log(HAZARD_RATIOS["age_per_decade"]),
+        "male": (sex.lower() == "male") * math.log(HAZARD_RATIOS["male"]),
+        "nyha_class": nyha_class * math.log(HAZARD_RATIOS["nyha_class"]),
+        "inverse_ef": (100 / ejection_fraction) * math.log(HAZARD_RATIOS["inverse_ef"]),
+        "ischemic": ischemic * math.log(HAZARD_RATIOS["ischemic"]),
+        "systolic_bp": (min(systolic_bp, 160) / 10) * math.log(HAZARD_RATIOS["sbp_per_10"]),
+        "loop_diuretic": (loop_diuretic_mg_day / weight_kg) * math.log(HAZARD_RATIOS["loop_diuretic_mg_kg_day"]),
+        "allopurinol": allopurinol * math.log(HAZARD_RATIOS["allopurinol"]),
+        "low_sodium": max(138 - sodium, 0) * math.log(HAZARD_RATIOS["sodium_below_138"]),
+        "inverse_cholesterol": (100 / total_cholesterol) * math.log(HAZARD_RATIOS["inverse_cholesterol"]),
+        "hemoglobin": ((16 - hemoglobin) * math.log(HAZARD_RATIOS["hemoglobin_below_16"])
+                       if hemoglobin < 16 else (hemoglobin - 16) * math.log(HAZARD_RATIOS["hemoglobin_above_16"])),
+        "lymphocytes": (min(lymphocyte_percent, 47) / 5) * math.log(HAZARD_RATIOS["lymphocyte_pct_per_5"]),
+        "uric_acid": max(uric_acid, 3.4) * math.log(HAZARD_RATIOS["uric_acid"]),
+        "ace_inhibitor": ace_inhibitor * math.log(HAZARD_RATIOS["ace_inhibitor"]),
+        "arb": arb * math.log(HAZARD_RATIOS["arb"]),
+        "beta_blocker": beta_blocker * math.log(HAZARD_RATIOS["beta_blocker"]),
+        "potassium_sparing_diuretic": potassium_sparing_diuretic * math.log(HAZARD_RATIOS["potassium_sparing_diuretic"]),
+        "statin": statin * math.log(HAZARD_RATIOS["statin"]),
+        "device": 0.0 if device == "none" else math.log(HAZARD_RATIOS[device]),
+    }
+    score = sum(contributions.values())
+    risk_multiplier = math.exp(min(score, 700))
+    survival = {f"{yr}_year": round(math.exp(-BASELINE_HAZARD_PER_YEAR * yr * risk_multiplier), 4)
+                for yr in (1, 2, 3, 5)}
+    mortality = {key: round(1 - value, 4) for key, value in survival.items()}
+    mortality.update({key + "_percent": round(value * 100, 2) for key, value in mortality.items()})
+    risk = mortality["1_year"]
+    risk_class = ("Low risk" if risk < .05 else "Moderate risk" if risk < .15
+                  else "High risk" if risk < .30 else "Very high risk")
     return {
-        "total_points": round(points, 4),
-        "point_breakdown": point_breakdown,
-        "survival": {
-            "1_year": round(survival_1yr, 4),
-            "2_year": round(survival_2yr, 4),
-            "5_year": round(survival_5yr, 4),
-        },
-        "mortality": {
-            "1_year": round(mortality_1yr, 4),
-            "1_year_percent": round(mortality_1yr * 100, 2),
-            "2_year": round(mortality_2yr, 4),
-            "2_year_percent": round(mortality_2yr * 100, 2),
-            "5_year": round(mortality_5yr, 4),
-            "5_year_percent": round(mortality_5yr * 100, 2),
-        },
+        "total_points": round(score, 4), "point_breakdown": {k: round(v, 6) for k, v in contributions.items()},
+        "survival": survival, "mortality": mortality,
         "risk_classification": risk_class,
-        "risk_description": risk_description,
+        "risk_description": "Descriptive mortality band; not a published SHFM classification",
+        "model": "Original Levy 2006; constant baseline hazard (not the revised UW web model)",
+        "disclaimer": "Research/education only; not independently clinically validated. Do not use for individual treatment decisions.",
         "inputs": {
-            "age": age,
-            "sex": sex,
-            "nyha_class": nyha_class,
-            "weight_kg": weight_kg,
-            "ischemic": ischemic,
-            "ejection_fraction": ejection_fraction,
-            "systolic_bp": systolic_bp,
-            "diastolic_bp": diastolic_bp,
-            "sodium": sodium,
-            "creatinine": creatinine,
-            "hemoglobin": hemoglobin,
-            "lymphocytes": lymphocytes,
-            "uric_acid": uric_acid,
-            "bun": bun,
-            "acei_arb": acei_arb,
-            "beta_blocker": beta_blocker,
-            "statin": statin,
-            "allopurinol": allopurinol,
-            "icd": icd,
-            "crt": crt,
-            "lvad": lvad,
+            "age": age, "sex": sex.lower(), "nyha_class": nyha_class, "ischemic": ischemic,
+            "ejection_fraction": ejection_fraction, "systolic_bp": systolic_bp,
+            "sodium": sodium, "hemoglobin": hemoglobin,
+            "lymphocyte_percent": lymphocyte_percent, "uric_acid": uric_acid,
+            "total_cholesterol": total_cholesterol, "weight_kg": weight_kg,
+            "loop_diuretic_mg_day": loop_diuretic_mg_day,
+            "ace_inhibitor": ace_inhibitor, "arb": arb, "beta_blocker": beta_blocker,
+            "statin": statin, "allopurinol": allopurinol,
+            "potassium_sparing_diuretic": potassium_sparing_diuretic, "device": device,
         },
     }
 
 
-def calculate_therapy_benefit(
-    base_result: Dict[str, Any],
-    therapy: str,
-    **therapy_params,
-) -> Dict[str, Any]:
+def calculate_therapy_benefit(base_result: dict[str, Any], therapy: str, **therapy_params: Any) -> dict[str, Any]:
+    """Illustrate coefficient-based scenarios, **not causal treatment benefit**.
+
+    Statins, LVAD, and device upgrades are deliberately not available as
+    intervention scenarios; observational associations are not efficacy data.
     """
-    Calculate the benefit of adding a therapy to the current regimen.
-    
-    Args:
-        base_result: Result from calculate_shfm_points (current regimen)
-        therapy: Name of therapy to add
-        **therapy_params: Additional parameters for recalculation
-    
-    Returns:
-        Dictionary with therapy benefit analysis
-    """
-    base_inputs = dict(base_result["inputs"])
-    base_inputs.update(therapy_params)
-    
-    # Apply the therapy
-    if therapy == "acei_arb":
-        base_inputs["acei_arb"] = True
-    elif therapy == "beta_blocker":
-        base_inputs["beta_blocker"] = True
-    elif therapy == "statin":
-        base_inputs["statin"] = True
-    elif therapy == "icd":
-        base_inputs["icd"] = True
-    elif therapy == "crt":
-        base_inputs["crt"] = True
-    elif therapy == "lvad":
-        base_inputs["lvad"] = True
-    else:
-        raise ValueError(f"Unknown therapy: {therapy}")
-    
-    new_result = calculate_shfm_points(**base_inputs)
-    
-    base_mortality = base_result["mortality"]["1_year_percent"]
-    new_mortality = new_result["mortality"]["1_year_percent"]
-    absolute_reduction = base_mortality - new_mortality
-    relative_reduction = (absolute_reduction / base_mortality * 100) if base_mortality > 0 else 0
-    
+    if therapy not in ("ace_inhibitor", "arb", "beta_blocker", "potassium_sparing_diuretic"):
+        raise ValueError("Unsupported intervention scenario: " + str(therapy))
+    inp = dict(base_result["inputs"])
+    if therapy_params:
+        unexpected = set(therapy_params) - set(inp)
+        if unexpected:
+            raise ValueError("Unknown parameters: " + ", ".join(sorted(unexpected)))
+        inp.update(therapy_params)
+    if inp[therapy]:
+        raise ValueError(f"{therapy} is already selected")
+    inp[therapy] = True
+    new_result = calculate_shfm_points(**inp)
+    baseline = base_result["mortality"]["1_year_percent"]
+    projected = new_result["mortality"]["1_year_percent"]
+    absolute = baseline - projected
     return {
         "therapy": therapy,
-        "baseline_mortality_1yr": base_mortality,
-        "projected_mortality_1yr": new_mortality,
-        "absolute_reduction": round(absolute_reduction, 2),
-        "relative_reduction_percent": round(relative_reduction, 1),
+        "baseline_mortality_1yr": baseline,
+        "projected_mortality_1yr": projected,
+        "absolute_reduction": round(absolute, 2),
+        "relative_reduction_percent": round(absolute / baseline * 100, 1) if baseline else 0.0,
+        "interpretation": "Mathematical association only, not a causal estimate or prescribing recommendation",
         "new_result": new_result,
     }
