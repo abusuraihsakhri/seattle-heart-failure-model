@@ -4,6 +4,7 @@ Enterprise Security, PHI Outbound Guard, and HMAC-SHA256 Audit Trail.
 """
 import os
 import secrets
+import threading
 import re
 import json
 import time
@@ -63,8 +64,13 @@ class AuditTrail:
         configured_key = secret_key if secret_key is not None else os.getenv("AUDIT_SECRET_KEY")
         self.secret_key = (configured_key if configured_key else secrets.token_hex(32)).encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
+        self._lock = threading.RLock()
 
     def log(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
+        with self._lock:
+            return self._log_locked(actor, actor_tier, event_type, details)
+
+    def _log_locked(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
         payload_str = json.dumps(details, sort_keys=True, allow_nan=False)
         for field in (actor, actor_tier, event_type):
             assert_no_phi(field)
@@ -89,6 +95,10 @@ class AuditTrail:
         return entry
 
     def verify_integrity(self) -> bool:
+        with self._lock:
+            return self._verify_integrity_locked()
+
+    def _verify_integrity_locked(self) -> bool:
         prev = "GENESIS_BLOCK_0000000000000000"
         for entry in self.logs:
             try:
@@ -105,7 +115,8 @@ class AuditTrail:
         return True
 
     def get_trail(self) -> List[Dict[str, Any]]:
-        return [dict(entry) for entry in self.logs]
+        with self._lock:
+            return [dict(entry) for entry in self.logs]
 
 
 GLOBAL_AUDIT = AuditTrail()
